@@ -43,3 +43,6 @@ Please use [secrets](https://www.home-assistant.io/docs/configuration/secrets/) 
 ## Experia Wifi
 This device_tracker queries the Experia Box V10A directly.
 If you are using an Experia Wifi access point in conjunction with your Experia Box V10A, the clients connected to the Experia Wifi access point will also be reported by this device_tracker.
+
+## Troubleshooting
+I have observed that sometimes the Experiabox V10A times out on the `GET /cgi/cgi_clients.js` call. What I did to work around this problem is rebooting the Experiabox V10A. 

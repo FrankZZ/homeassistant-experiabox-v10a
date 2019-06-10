@@ -107,7 +107,7 @@ class ExperiaBoxV10ADeviceScanner(DeviceScanner):
 
         login_url = 'http://{}/login.cgi'.format(self.host)
         # this request will reply with a 302 Found, we don't want to be redirected just yet in order to do error handling
-        start_page = session.post(login_url, allow_redirects = False, data = login_payload, headers = {'referer': 'http://{}/login.htm'.format(self.host)})
+        start_page = session.post(login_url, allow_redirects = False, data = login_payload, timeout=5, headers = {'referer': 'http://{}/login.htm'.format(self.host)})
 
         _LOGGER.debug('login.cgi start_page')
         _LOGGER.debug(start_page.status_code)
@@ -122,7 +122,7 @@ class ExperiaBoxV10ADeviceScanner(DeviceScanner):
             _LOGGER.error('Could not log in to the device. Got redirected to {}'.format(start_page.headers['Location']))
             return False
 
-        index_page = session.get('http://{}{}'.format(self.host, start_page.headers['Location']), headers = {'referer': 'http://{}/login.htm'.format(self.host)})
+        index_page = session.get('http://{}{}'.format(self.host, start_page.headers['Location']), timeout=5, headers = {'referer': 'http://{}/login.htm'.format(self.host)})
 
         _LOGGER.debug('index.htm index_page')
         _LOGGER.debug(index_page.status_code)
@@ -131,7 +131,7 @@ class ExperiaBoxV10ADeviceScanner(DeviceScanner):
         index_httoken_search = re.search("yH5BAEAAAAALAAAAAABAAEAAAIBRAA7(.+)\" border=0>", index_page.text)
         index_authenticity_token = base64.b64decode(index_httoken_search.group(1)).decode('utf-8')
 
-        home_map_page = session.get('http://{}/home_map.htm?t={}'.format(self.host, ts), headers = {'referer': 'http://{}/index.htm'.format(self.host)})
+        home_map_page = session.get('http://{}/home_map.htm?t={}'.format(self.host, ts), timeout=5, headers = {'referer': 'http://{}/index.htm'.format(self.host)})
         _LOGGER.debug('home_map.htm home_map_page')
         _LOGGER.debug(home_map_page.status_code)
 
@@ -139,15 +139,17 @@ class ExperiaBoxV10ADeviceScanner(DeviceScanner):
         home_map_httoken_search = re.search("yH5BAEAAAAALAAAAAABAAEAAAIBRAA7(.+)\" border=0>", home_map_page.text)
         home_map_authenticity_token = base64.b64decode(home_map_httoken_search.group(1)).decode('utf-8')
 
-        data_url = 'http://{}/cgi/cgi_clients.js?_tn={}&_t={}&_={}'.format(self.host, home_map_authenticity_token, ts, ts)
-        data_page = session.get(data_url, headers={'referer': 'http://{}/home_map.htm?t={}'.format(self.host, ts)})
-        _LOGGER.debug('cgi_clients.js data_page')
-        _LOGGER.debug(data_page.status_code)
-
-        # response is a javascript file with various information, for now we just want the online clients.
-        data_search = re.search("var online_client=\\[(.*?)\\];", data_page.text, re.DOTALL)
-
-        result = data_search.group(1).split('\n,')
+        result = False
+        try:
+            data_url = 'http://{}/cgi/cgi_clients.js?_tn={}'.format(self.host, home_map_authenticity_token, ts, ts)
+            data_page = session.get(data_url, timeout=5, headers={'referer': 'http://{}/home_map.htm?t={}'.format(self.host, ts)})
+            _LOGGER.debug('cgi_clients.js data_page')
+            _LOGGER.debug(data_page.status_code)
+            # response is a javascript file with various information, for now we just want the online clients.
+            data_search = re.search("var online_client=\\[(.*?)\\];", data_page.text, re.DOTALL)
+            result = data_search.group(1).split('\n,')
+        except requests.exceptions.Timeout:
+            _LOGGER.error('Could not fetch cgi_clients, a timeout occurred.')
 
         # log out using the token we stored earlier
         logout_payload = {
@@ -155,7 +157,7 @@ class ExperiaBoxV10ADeviceScanner(DeviceScanner):
         }
 
         logout_url = 'http://{}/logout.cgi'.format(self.host)
-        log_out_page = session.post(logout_url, data = logout_payload, headers = {'referer': 'http://{}/index.htm'.format(self.host)})
+        log_out_page = session.post(logout_url, data = logout_payload, timeout=5, headers = {'referer': 'http://{}/index.htm'.format(self.host)})
 
         now = dt_util.now()
 
